@@ -2,13 +2,6 @@ SELECT *
 FROM SQLDataExploration..COVIDDeaths
 order by 3, 4
 
---In Pakistan
-
-SELECT *
-FROM SQLDataExploration..COVIDDeaths
-WHERE location LIKE'Pakistan'
-order by 3, 4
-
 SELECT *
 FROM SQLDataExploration..COVIDVaccinations
 
@@ -27,7 +20,7 @@ WHERE location LIKE 'Pakistan'
 
 SELECT location, MAX(total_cases) as HighestCaseCount, population, Max((total_cases/population))*100 as TotalInfectionPercentage
 FROM SQLDataExploration..COVIDDeaths
---WHERE continent LIKE 'Asia'
+WHERE continent LIKE 'Asia'
 GROUP BY location, population
 ORDER BY TotalInfectionPercentage desc
 
@@ -47,7 +40,7 @@ WHERE continent is NOT NULL
 GROUP BY continent
 ORDER BY TotalDeaths desc
 
---Another way to count deaths by continents; where continent column is NULL, it's the continent itself in the location column, along with other categories
+--Another way to count deaths by continents; because it's the continent itself in the location column where continent column is null, along with other categories
 
 SELECT location, MAX(CAST(total_deaths as int)) as TotalDeaths 
 FROM SQLDataExploration..COVIDDeaths
@@ -55,21 +48,21 @@ WHERE continent is NULL
 GROUP BY location
 ORDER BY TotalDeaths desc
 
---Total death count by continents per population
+--Total death count by income globally
 
-SELECT continent, MAX(CAST(total_deaths as int)) as HighestDeathCount, MAX(total_deaths/population)*100 as TotalDeathsPerPopulation 
+SELECT location, MAX(CAST(total_deaths as int)) as TotalDeaths 
+FROM SQLDataExploration..COVIDDeaths
+WHERE continent is NULL and location LIKE '%income%'
+GROUP BY location
+ORDER BY TotalDeaths desc
+
+--Percentage of total death count by continents per population
+
+SELECT continent, MAX(CAST(total_deaths as int)) as HighestDeathCount, MAX(total_deaths/population)*100 as PercOfTotalDeaths 
 FROM SQLDataExploration..COVIDDeaths
 WHERE continent is NOT NULL
 GROUP BY continent
-ORDER BY TotalDeathsPerPopulation desc
-
---Another way to count deaths by continents
-
-SELECT location, MAX(CAST(total_deaths as int)) as HighestDeathCount, MAX(total_deaths/population)*100 as TotalDeathsPerPopulation 
-FROM SQLDataExploration..COVIDDeaths
-WHERE continent is NULL
-GROUP BY location
-ORDER BY TotalDeathsPerPopulation desc
+ORDER BY PercOfTotalDeaths desc
 
 --Total death count by countries in Asia
 
@@ -95,13 +88,7 @@ WHERE continent is NOT NULL
 --GROUP BY date
 ORDER BY 1,2 
 
---COVID Vaccination table
-
-SELECT *
-FROM SQLDataExploration..COVIDVaccinations
-Where location='Pakistan'
-
---Joining both tables
+--Joining COVID Deaths and Covis Vaccinations table
 
 SELECT *
 FROM SQLDataExploration..COVIDDeaths deaths
@@ -109,7 +96,7 @@ JOIN SQLDataExploration..COVIDVaccinations vacc
 ON deaths.date=vacc.date
 AND deaths.location=vacc.location
 
---Total population vs new vaccinations globally
+--Total population vs new vaccinations globally, and calculating Total Vaccinations at every occurance 
 
 SELECT deaths.continent, deaths.date, deaths.location, deaths.population, vacc.new_vaccinations, 
 SUM(CONVERT(bigint,vacc.new_vaccinations)) OVER (partition by deaths.location ORDER BY deaths.location, deaths.date) as TotalVaccinations
@@ -133,7 +120,8 @@ WHERE deaths.location LIKE 'Pakistan' AND deaths.continent is NOT NULL
 --Group BY vacc.location
 ORDER BY 3, 2
 
---CTE - Percentage of population vaccinated, by creating new table and column
+--Using Common Table Expression (CTE) - Total Percentage of population vaccinated in Globally
+--Creating a new table as PopVsVacc, adding a new columnn as TotalVaccinations and calcuting VaccinatedPopulationPercentage by population
 
 WITH PopvsVacc (Continent, Date, Location, Population, New_vaccinations, TotalVaccinations)
 as
@@ -145,33 +133,14 @@ FROM SQLDataExploration..COVIDDeaths deaths
 JOIN SQLDataExploration..COVIDVaccinations vacc
 ON deaths.date=vacc.date
 AND deaths.location=vacc.location
-WHERE deaths.location LIKE 'Pakistan' AND deaths.continent is NOT NULL
+WHERE deaths.continent is NOT NULL
 --Group BY vacc.location
 --ORDER BY 3, 2
 )
 SELECT*, (TotalVaccinations/population)*100 as VaccinatedPopulationPercentage
 FROM PopvsVacc
 
---Percentage of population vaccinated in Pakistan using the same method
-
-WITH PopvsVacc (Continent, Date, Location, Population, New_vaccinations, TotalVaccinations)
-as
-(
-SELECT deaths.continent, deaths.date, deaths.location, deaths.population, vacc.new_vaccinations, 
-SUM(CONVERT(bigint,vacc.new_vaccinations)) OVER (partition by deaths.location ORDER BY deaths.location, deaths.date) as TotalVaccinations
---,SUM(TotalVaccinations/population)*100 
-FROM SQLDataExploration..COVIDDeaths deaths
-JOIN SQLDataExploration..COVIDVaccinations vacc
-ON deaths.date=vacc.date
-AND deaths.location=vacc.location
-WHERE deaths.location LIKE 'Pakistan' AND deaths.continent is NOT NULL
---Group BY vacc.location
---ORDER BY 3, 2
-)
-SELECT*, (TotalVaccinations/population)*100 as VaccinatedPopulationPercentage
-FROM PopvsVacc
-
---Temp Table
+--Creating a Temp Table and getting percentage of population vaccinated in Pakistan using the same above method
 
 DROP TABLE if exists VaccinatedPercentage
 CREATE TABLE VaccinatedPercentage (
@@ -185,14 +154,15 @@ FROM SQLDataExploration..COVIDDeaths deaths
 JOIN SQLDataExploration..COVIDVaccinations vacc
 ON deaths.date=vacc.date
 AND deaths.location=vacc.location
-WHERE deaths.continent is NOT NULL
+WHERE deaths.location LIKE 'Pakistan' AND deaths.continent is NOT NULL
 --Group BY vacc.location
 --ORDER BY 3, 2
 
 SELECT*, (VaccinatedPopulationPercentage/population)*100 as VaccinatedPopulationPercentage
 FROM VaccinatedPercentage
 
--- Creating VIEWS
+
+-- Creating VIEWs
 
 CREATE VIEW PercentageOfTotalCases as
 SELECT date, location, total_cases, population, (total_cases/population)*100 as PercOfTotalCases
